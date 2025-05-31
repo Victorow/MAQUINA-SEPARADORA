@@ -1,0 +1,16 @@
+{
+  "name": "nodered_projeto_local",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "node-red": "^4.0.9",
+    "node-red-contrib-postgres": "^0.6.1"
+  }
+}

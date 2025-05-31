@@ -1,0 +1,32 @@
+name: esteira_separadora_app # Make sure this matches your project folder name
+description: A Flutter application for monitoring a piece separator machine.
+publish_to: 'none' # Remove this line if you intend to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0' # Ensure your Flutter SDK version is compatible
+
+dependencies:
+  flutter:
+    sdk: flutter
+  mysql1: ^0.20.0
+  supabase_flutter: ^2.5.0 # Exemplo de versão, use a mais recente
+  fl_chart: ^0.68.0 # Check for the latest version on pub.dev if needed
+  intl: ^0.19.0     # Check for the latest version
+  provider: ^6.0.0  # Check for the latest version
+  equatable: ^2.0.5 # Check for the latest version
+
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  # To add assets to your application, add an assets section, like this:
+  # assets:
+  #   - images/a_dot_burr.jpeg
+  #   - images/a_dot_ham.jpeg
