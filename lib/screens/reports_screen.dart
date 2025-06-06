@@ -1,45 +1,11 @@
-// lib/screens/reports_screen.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // For date formatting
-import 'package:fl_chart/fl_chart.dart'; // For charts
+import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
+
 import '../widgets/app_drawer.dart';
-import '../widgets/info_card.dart'; // Re-using InfoCard
-
-// Data Models
-class ReportSummaryData {
-  final int totalProcessed;
-  final double successRate;
-
-  ReportSummaryData({required this.totalProcessed, required this.successRate});
-}
-
-class DailyMaterialProduction {
-  final DateTime date;
-  final int metalCount;
-  final int plasticCount;
-
-  DailyMaterialProduction({
-    required this.date,
-    required this.metalCount,
-    required this.plasticCount,
-  });
-}
-
-class PieceTypeSummaryItem {
-  final String pieceType;
-  final String material;
-  final String color;
-  final int quantity;
-  final double percentageOfTotal;
-
-  PieceTypeSummaryItem({
-    required this.pieceType,
-    required this.material,
-    required this.color,
-    required this.quantity,
-    required this.percentageOfTotal,
-  });
-}
+import '../widgets/info_card.dart';
+import '../services/db_service.dart';
+import '../models/report_models.dart';
 
 class ReportsScreen extends StatefulWidget {
   static const routeName = '/reports';
@@ -52,61 +18,23 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  DateTime _startDate = DateTime.now().subtract(const Duration(days: 10));
+  DateTime _startDate = DateTime.now().subtract(const Duration(days: 7));
   DateTime _endDate = DateTime.now();
 
-  ReportSummaryData _summaryData = ReportSummaryData(totalProcessed: 14582, successRate: 98.7);
-  final List<DailyMaterialProduction> _dailyProduction = [];
+  ReportSummaryData? _summaryData;
+  List<DailyMaterialProduction> _dailyProduction = [];
   List<PieceTypeSummaryItem> _pieceTypeSummary = [];
 
   bool _isLoading = false;
   bool _reportGenerated = false;
 
+  final DbService _dbService = DbService();
+
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-  }
-
-  void _generateMockReportData() {
-    setState(() {
-      _isLoading = true;
-    });
-
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _summaryData = ReportSummaryData(
-          totalProcessed: 13000 + (_endDate.difference(_startDate).inDays * 150),
-          successRate: 97.5 + (_endDate.day % 10) * 0.1);
-
-      _dailyProduction.clear();
-      int days = _endDate.difference(_startDate).inDays;
-      if (days < 0) days = 0;
-      if (days > 30) days = 30;
-
-      for (int i = 0; i <= days; i++) {
-        final date = _startDate.add(Duration(days: i));
-        _dailyProduction.add(DailyMaterialProduction(
-          date: date,
-          metalCount: 80 + (i * 5) + (date.day % 20),
-          plasticCount: 60 + (i * 3) + (date.day % 15),
-        ));
-      }
-
-      _pieceTypeSummary.clear();
-      final totalForSummary = _summaryData.totalProcessed > 0 ? _summaryData.totalProcessed : 1;
-      _pieceTypeSummary = [
-        PieceTypeSummaryItem(pieceType: 'Cilindro P', material: 'Metal', color: 'Azul', quantity: (totalForSummary * 0.2).toInt(), percentageOfTotal: 20.0),
-        PieceTypeSummaryItem(pieceType: 'Cubo M', material: 'Plástico', color: 'Vermelho', quantity: (totalForSummary * 0.15).toInt(), percentageOfTotal: 15.0),
-        PieceTypeSummaryItem(pieceType: 'Paralel. G', material: 'Metal', color: 'Verde', quantity: (totalForSummary * 0.25).toInt(), percentageOfTotal: 25.0),
-        PieceTypeSummaryItem(pieceType: 'Esfera P', material: 'Plástico', color: 'Amarelo', quantity: (totalForSummary * 0.1).toInt(), percentageOfTotal: 10.0),
-        PieceTypeSummaryItem(pieceType: 'Outros', material: 'Variado', color: 'N/A', quantity: (totalForSummary * 0.3).toInt(), percentageOfTotal: 30.0),
-      ];
-
-      setState(() {
-        _isLoading = false;
-        _reportGenerated = true;
-      });
-    });
   }
 
   @override
@@ -115,12 +43,67 @@ class _ReportsScreenState extends State<ReportsScreen>
     super.dispose();
   }
 
+  Future<void> _fetchAndGenerateReport() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _reportGenerated = false;
+      _summaryData = null;
+      _dailyProduction = [];
+      _pieceTypeSummary = [];
+    });
+
+    try {
+      final summary = await _dbService.fetchReportSummary(_startDate, _endDate);
+      final dailyProd = await _dbService.fetchDailyMaterialProduction(_startDate, _endDate);
+      final pieceSummary = await _dbService.fetchPieceTypeSummary(_startDate, _endDate);
+
+      if (mounted) {
+        setState(() {
+          _summaryData = summary;
+          _dailyProduction = dailyProd;
+          _pieceTypeSummary = pieceSummary;
+          _reportGenerated = true;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao gerar relatório: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: isStartDate ? _startDate : _endDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
+      firstDate: DateTime(2023),
+      lastDate: DateTime.now().add(const Duration(days: 1)),
+      helpText: isStartDate ? 'SELECIONE A DATA INICIAL' : 'SELECIONE A DATA FINAL',
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: Theme.of(context).colorScheme.primary,
+                  onPrimary: Colors.white,
+                ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (picked != null) {
       setState(() {
@@ -131,7 +114,7 @@ class _ReportsScreenState extends State<ReportsScreen>
           }
         } else {
           _endDate = picked;
-           if (_endDate.isBefore(_startDate)) {
+          if (_endDate.isBefore(_startDate)) {
             _startDate = _endDate;
           }
         }
@@ -142,38 +125,39 @@ class _ReportsScreenState extends State<ReportsScreen>
 
   Widget _buildExportButton(String label, IconData icon, VoidCallback onPressed) {
     return ElevatedButton.icon(
-      icon: Icon(icon, size: 16),
+      icon: Icon(icon, size: 18),
       label: Text(label),
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        textStyle: const TextStyle(fontSize: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final ThemeData theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Estação - Relatórios'),
         actions: [
           _buildExportButton('PDF', Icons.picture_as_pdf_outlined, () {
-             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Exportar PDF não implementado')));
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Exportar PDF não implementado.')));
           }),
           const SizedBox(width: 8),
-          _buildExportButton('CSV', Icons.article_outlined, () { // Icon was already corrected
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Exportar CSV não implementado')));
+          _buildExportButton('CSV', Icons.summarize_outlined, () {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Exportar CSV não implementado.')));
           }),
-          const SizedBox(width: 8),
+          const SizedBox(width: 16),
         ],
         bottom: TabBar(
           controller: _tabController,
+          labelStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           tabs: const [
-            Tab(text: 'Produção Diária'),
-            Tab(text: 'Eficiência Operacional'),
-            Tab(text: 'Saúde dos Sensores'),
+            Tab(icon: Icon(Icons.calendar_view_day_outlined), text: 'Produção Diária'),
+            Tab(icon: Icon(Icons.settings_accessibility_outlined), text: 'Eficiência'),
+            Tab(icon: Icon(Icons.sensors_outlined), text: 'Sensores'),
           ],
         ),
       ),
@@ -182,55 +166,64 @@ class _ReportsScreenState extends State<ReportsScreen>
         controller: _tabController,
         children: [
           _buildDailyProductionTab(theme),
-          const Center(child: Text('Relatório de Eficiência Operacional em Desenvolvimento')),
-          const Center(child: Text('Relatório de Saúde dos Sensores em Desenvolvimento')),
+          _buildPlaceholderTab("Relatório de Eficiência Operacional"),
+          _buildPlaceholderTab("Relatório de Saúde dos Sensores"),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholderTab(String title) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Text('$title em Desenvolvimento...', style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.grey)),
       ),
     );
   }
 
   Widget _buildDailyProductionTab(ThemeData theme) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.all(20.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Date Filters
           Card(
-            elevation: 1,
+            elevation: 2,
             child: Padding(
-              padding: const EdgeInsets.all(12.0),
+              padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Período:", style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
+                  Text("Selecione o Período:", style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.primary)),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
                         child: InkWell(
                           onTap: () => _selectDate(context, true),
                           child: InputDecorator(
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'De',
-                              border: OutlineInputBorder(),
-                              suffixIcon: Icon(Icons.calendar_today),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              suffixIcon: Icon(Icons.calendar_month_outlined, color: theme.colorScheme.primary),
                             ),
                             child: Text(DateFormat('dd/MM/yyyy').format(_startDate)),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      const Text("até"),
-                      const SizedBox(width: 10),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12.0),
+                        child: Text("até", style: TextStyle(fontSize: 16)),
+                      ),
                       Expanded(
                         child: InkWell(
                           onTap: () => _selectDate(context, false),
                           child: InputDecorator(
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               labelText: 'Até',
-                              border: OutlineInputBorder(),
-                              suffixIcon: Icon(Icons.calendar_today),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                              suffixIcon: Icon(Icons.calendar_month_outlined, color: theme.colorScheme.primary),
                             ),
                             child: Text(DateFormat('dd/MM/yyyy').format(_endDate)),
                           ),
@@ -238,13 +231,15 @@ class _ReportsScreenState extends State<ReportsScreen>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 20),
                   ElevatedButton.icon(
-                    icon: _isLoading ? const SizedBox(width:18, height:18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white,)) : const Icon(Icons.assessment_outlined),
+                    icon: _isLoading
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white,))
+                        : const Icon(Icons.bar_chart_rounded, size: 20),
                     label: const Text('Gerar Relatório'),
-                    onPressed: _isLoading ? null : _generateMockReportData,
+                    onPressed: _isLoading ? null : _fetchAndGenerateReport,
                     style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 40),
+                      minimumSize: const Size(double.infinity, 48),
                     ),
                   )
                 ],
@@ -253,185 +248,245 @@ class _ReportsScreenState extends State<ReportsScreen>
           ),
           const SizedBox(height: 24),
 
-          if (_reportGenerated) ...[
-            Row(
-              children: [
-                Expanded(
-                    child: InfoCard(
-                        title: 'Total Peças Processadas',
-                        value: NumberFormat.decimalPattern('pt_BR').format(_summaryData.totalProcessed),
-                        icon: Icons.precision_manufacturing_outlined)),
-                const SizedBox(width: 16),
-                Expanded(
-                    child: InfoCard(
-                        title: 'Taxa de Sucesso',
-                        value: '${_summaryData.successRate.toStringAsFixed(1)}%',
-                        valueColor: Colors.green[700],
-                        icon: Icons.check_circle_outline)),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            Text('Produção Diária por Material', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Container(
-              height: 250,
-              padding: const EdgeInsets.only(top: 16, right: 16),
-              child: _dailyProduction.isEmpty
-                  ? const Center(child: Text("Sem dados para o período selecionado."))
-                  : LineChart(
-                      LineChartData(
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: true,
-                          getDrawingHorizontalLine: (value) => FlLine(color: theme.dividerColor, strokeWidth: 0.5),
-                          getDrawingVerticalLine: (value) => FlLine(color: theme.dividerColor, strokeWidth: 0.5),
-                        ),
-                        titlesData: FlTitlesData(
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 30,
-                              interval: _dailyProduction.length > 7 ? (_dailyProduction.length / 7).ceilToDouble() : 1,
-                              getTitlesWidget: (value, meta) {
-                                final index = value.toInt();
-                                if (index >= 0 && index < _dailyProduction.length) {
-                                  return SideTitleWidget( // This widget cannot be const
-                                    axisSide: meta.axisSide,
-                                    space: 8.0,
-                                    child: Text(DateFormat('dd/MM').format(_dailyProduction[index].date), style: const TextStyle(fontSize: 10)),
-                                  );
-                                }
-                                return Container(); // Can be const Container() if needed
-                              },
-                            ),
-                          ),
-                          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 40)),
-                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        ),
-                        borderData: FlBorderData(show: true, border: Border.all(color: theme.dividerColor)),
-                        minX: 0,
-                        maxX: (_dailyProduction.length -1).toDouble(),
-                        minY: 0,
-                        lineBarsData: [
-                          LineChartBarData(
-                            spots: _dailyProduction.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.metalCount.toDouble())).toList(),
-                            isCurved: true,
-                            color: Colors.blue,
-                            barWidth: 3,
-                            isStrokeCapRound: true,
-                            dotData: const FlDotData(show: false),
-                            belowBarData: BarAreaData(show: false),
-                          ),
-                          LineChartBarData(
-                            spots: _dailyProduction.asMap().entries.map((e) => FlSpot(e.key.toDouble(), e.value.plasticCount.toDouble())).toList(),
-                            isCurved: true,
-                            color: Colors.green,
-                            barWidth: 3,
-                            isStrokeCapRound: true,
-                            dotData: const FlDotData(show: false),
-                            belowBarData: BarAreaData(show: false),
-                          ),
-                        ],
-                        lineTouchData: LineTouchData(
-                          touchTooltipData: LineTouchTooltipData(
-                            getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-                              return touchedBarSpots.map((barSpot) {
-                                final flSpot = barSpot;
-                                String materialName = "";
-                                if (barSpot.barIndex == 0) materialName = "Metal";
-                                if (barSpot.barIndex == 1) materialName = "Plástico";
-                                return LineTooltipItem(
-                                  '$materialName: ${flSpot.y.toInt()} peças\n',
-                                  TextStyle(color: barSpot.bar.color, fontWeight: FontWeight.bold),
-                                  children: [
-                                    TextSpan(
-                                      text: DateFormat('dd/MM/yyyy').format(_dailyProduction[flSpot.x.toInt()].date),
-                                      style: const TextStyle(color: Colors.grey, fontSize: 10),
-                                    ),
-                                  ]
-                                );
-                              }).toList();
-                            }
-                          )
-                        ),
-                        extraLinesData: ExtraLinesData(
-                          horizontalLines: [
-                            HorizontalLine(y: 0, color: Colors.transparent)
-                          ]
-                        ),
-                      ),
-                    ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0, left: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+          if (_isLoading)
+            const Center(child: Padding(padding: EdgeInsets.all(32.0), child: CircularProgressIndicator()))
+          else if (_reportGenerated) ...[
+            if (_summaryData != null) ...[
+              Text("Resumo do Período", style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.primary)),
+              const SizedBox(height: 12),
+              Row(
                 children: [
-                  _buildLegendItem(Colors.blue, "Metal"),
+                  Expanded(
+                    child: InfoCard(
+                      title: 'Total Processadas',
+                      value: NumberFormat.decimalPattern('pt_BR').format(_summaryData!.totalProcessed),
+                      icon: Icons.precision_manufacturing_rounded,
+                      iconColor: theme.colorScheme.secondary,
+                    ),
+                  ),
                   const SizedBox(width: 16),
-                  _buildLegendItem(Colors.green, "Plástico"),
+                  Expanded(
+                    child: InfoCard(
+                      title: 'Taxa de Sucesso (%)',
+                      value: _summaryData!.successRate.toStringAsFixed(1),
+                      valueColor: _summaryData!.successRate > 90 ? Colors.green.shade700 : Colors.orange.shade700,
+                      iconColor: _summaryData!.successRate > 90 ? Colors.green.shade600 : Colors.orange.shade600,
+                      icon: Icons.check_circle_rounded,
+                    ),
+                  ),
                 ],
               ),
-            ),
+              const SizedBox(height: 24),
+            ] else ...[
+              const Center(child: Text("Não foi possível carregar o resumo do período.", style: TextStyle(color: Colors.red))),
+              const SizedBox(height: 24),
+            ],
+
+            Text('Produção Diária por Material', style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.primary)),
+            const SizedBox(height: 12),
+            _buildDailyProductionLineChart(theme),
             const SizedBox(height: 24),
 
-            Text('Resumo por Tipo de Peça', style: theme.textTheme.titleLarge),
-            const SizedBox(height: 8),
-            _buildPieceTypeSummaryTable(), // Definition below
-          ] else if (!_isLoading) ... [
+            Text('Resumo por Tipo de Peça', style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.primary)),
+            const SizedBox(height: 12),
+            _buildPieceTypeSummaryTable(theme),
+          ] else ...[
             const Center(
               child: Padding(
                 padding: EdgeInsets.symmetric(vertical: 40.0),
-                child: Text("Selecione um período e clique em 'Gerar Relatório' para ver os dados.", textAlign: TextAlign.center),
+                child: Column(
+                  children: [
+                    Icon(Icons.info_outline_rounded, size: 48, color: Colors.grey),
+                    SizedBox(height: 12),
+                    Text("Selecione um período e clique em 'Gerar Relatório' para visualizar os dados.", textAlign: TextAlign.center, style: TextStyle(fontSize: 15)),
+                  ],
+                ),
               ),
             )
           ],
-          if (_isLoading)
-            const Center(child: Padding(
-              padding: EdgeInsets.symmetric(vertical: 40.0),
-              child: CircularProgressIndicator(),
-            )),
         ],
       ),
     );
   }
 
-  Widget _buildLegendItem(Color color, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(width: 12, height: 12, color: color),
-        const SizedBox(width: 4),
-        Text(text, style: const TextStyle(fontSize: 12)),
-      ],
+  Widget _buildDailyProductionLineChart(ThemeData theme) {
+    if (_dailyProduction.isEmpty && _reportGenerated && !_isLoading) {
+      return const SizedBox(height: 250, child: Center(child: Text("Sem dados de produção diária para o período selecionado.")));
+    }
+    if (!_reportGenerated || _dailyProduction.isEmpty) return const SizedBox.shrink();
+
+    // Obtenha todas as datas únicas ordenadas
+    final dates = _dailyProduction.map((e) => e.date).toSet().toList()..sort();
+    // Obtenha todos os materiais únicos
+    final materials = _dailyProduction.map((e) => e.material).toSet().toList();
+
+    // Crie um mapa para cada material com os counts por data
+    Map<String, List<FlSpot>> materialSpots = {};
+    double maxY = 0;
+    for (var material in materials) {
+      materialSpots[material] = [];
+      for (int i = 0; i < dates.length; i++) {
+        final date = dates[i];
+        final prod = _dailyProduction.firstWhere(
+          (p) => p.date == date && p.material == material,
+          orElse: () => DailyMaterialProduction(date: date, material: material, count: 0),
+        );
+        materialSpots[material]!.add(FlSpot(i.toDouble(), prod.count.toDouble()));
+        if (prod.count > maxY) maxY = prod.count.toDouble();
+      }
+    }
+    maxY = (maxY * 1.15).ceilToDouble();
+    if (maxY < 10) maxY = 10;
+
+    final colorMap = {
+      'metal': Colors.blueGrey,
+      'plástico': Colors.orange,
+      // adicione mais materiais se necessário
+    };
+
+    return Container(
+      height: 320,
+      padding: const EdgeInsets.only(top: 24, right: 20, bottom: 12, left: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLowest.withAlpha(100),
+        borderRadius: BorderRadius.circular(12.0),
+      ),
+      child: LineChart(
+        LineChartData(
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: true,
+            horizontalInterval: (maxY / 5).ceilToDouble() > 0 ? (maxY / 5).ceilToDouble() : 1,
+            verticalInterval: dates.length > 10 ? (dates.length / 7).ceilToDouble() : 1,
+            getDrawingHorizontalLine: (value) => FlLine(color: theme.dividerColor.withAlpha(80), strokeWidth: 0.6),
+            getDrawingVerticalLine: (value) => FlLine(color: theme.dividerColor.withAlpha(80), strokeWidth: 0.6),
+          ),
+          titlesData: FlTitlesData(
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 32,
+                interval: dates.length > 7 ? ((dates.length / 5).ceilToDouble()).clamp(1, 5).toDouble() : 1,
+                getTitlesWidget: (value, meta) {
+                  final index = value.toInt();
+                  if (index >= 0 && index < dates.length) {
+                    if (dates.length <= 7 || index % ((dates.length / 5).ceil()) == 0 || index == dates.length - 1) {
+                      return SideTitleWidget(
+                        axisSide: meta.axisSide,
+                        space: 8.0,
+                        child: Text(DateFormat('dd/MM').format(dates[index]), style: theme.textTheme.bodySmall),
+                      );
+                    }
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+            ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 40,
+                interval: (maxY / 5).ceilToDouble() > 0 ? (maxY / 5).ceilToDouble() : 1,
+                getTitlesWidget: (v, meta) {
+                  if (v == meta.max && maxY > 0) return const SizedBox.shrink();
+                  return Text(v.toInt().toString(), style: theme.textTheme.bodySmall);
+                },
+              ),
+            ),
+            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          ),
+          borderData: FlBorderData(show: true, border: Border.all(color: theme.dividerColor.withAlpha(150), width: 0.8)),
+          minX: 0,
+          maxX: (dates.length - 1).toDouble(),
+          minY: 0,
+          maxY: maxY,
+          lineBarsData: materials.map((material) {
+            return LineChartBarData(
+              spots: materialSpots[material]!,
+              isCurved: true,
+              color: colorMap[material] ?? Colors.grey,
+              barWidth: 3,
+              isStrokeCapRound: true,
+              dotData: const FlDotData(show: false),
+              belowBarData: BarAreaData(show: true, color: (colorMap[material] ?? Colors.grey).withAlpha(30)),
+            );
+          }).toList(),
+          lineTouchData: LineTouchData(
+            touchTooltipData: LineTouchTooltipData(
+              getTooltipColor: (touchedSpot) => Colors.blueGrey.withAlpha(230),
+              getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
+                return touchedBarSpots.map((barSpot) {
+                  final flSpot = barSpot;
+                  final material = materials[barSpot.barIndex];
+                  final dateIndex = flSpot.x.toInt();
+                  if (dateIndex < 0 || dateIndex >= dates.length) return null;
+                  return LineTooltipItem(
+                    '$material: ${flSpot.y.toInt()} peças\n',
+                    TextStyle(color: colorMap[material] ?? Colors.grey, fontWeight: FontWeight.bold, fontSize: 13),
+                    children: [
+                      TextSpan(
+                        text: DateFormat('dd/MM/yyyy').format(dates[dateIndex]),
+                        style: TextStyle(color: Colors.white.withAlpha(180), fontSize: 11),
+                      ),
+                    ],
+                    textAlign: TextAlign.left,
+                  );
+                }).where((item) => item != null).toList().cast<LineTooltipItem>();
+              },
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildPieceTypeSummaryTable() {
-    return DataTable(
-      columnSpacing: 16.0,
-      headingRowHeight: 36,
-      dataRowMinHeight: 32,
-      dataRowMaxHeight: 36,
-      columns: const [ // DataColumn can be const
-        DataColumn(label: Text('Tipo Peça', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-        DataColumn(label: Text('Material', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-        // FIX: Changed L.bold to FontWeight.bold and made TextStyle const
-        DataColumn(label: Text('Cor', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-        DataColumn(label: Text('Qtd.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), numeric: true),
-        DataColumn(label: Text('% Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)), numeric: true),
-      ],
-      rows: _pieceTypeSummary.map((item) {
-        return DataRow(cells: [ // DataRow cells cannot be const if content is dynamic
-          DataCell(Text(item.pieceType, style: const TextStyle(fontSize: 11))),
-          DataCell(Text(item.material, style: const TextStyle(fontSize: 11))),
-          DataCell(Text(item.color, style: const TextStyle(fontSize: 11))),
-          DataCell(Text(NumberFormat.decimalPattern('pt_BR').format(item.quantity), style: const TextStyle(fontSize: 11))),
-          DataCell(Text('${item.percentageOfTotal.toStringAsFixed(1)}%', style: const TextStyle(fontSize: 11))),
-        ]);
-      }).toList(),
+  Widget _buildPieceTypeSummaryTable(ThemeData theme) {
+    if (_pieceTypeSummary.isEmpty && _reportGenerated && !_isLoading) {
+      return const SizedBox(height: 150, child: Center(child: Text("Sem dados de resumo por tipo de peça para o período.")));
+    }
+    if (!_reportGenerated || _pieceTypeSummary.isEmpty) return const SizedBox.shrink();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth),
+            child: DataTable(
+              columnSpacing: 20.0,
+              headingRowHeight: 40,
+              dataRowMinHeight: 38,
+              dataRowMaxHeight: 38,
+              headingTextStyle: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.onSurfaceVariant),
+              columns: const [
+                DataColumn(label: Text('Tipo Peça')),
+                DataColumn(label: Text('Material')),
+                DataColumn(label: Text('Cor')),
+                DataColumn(label: Text('Qtd.'), numeric: true),
+                DataColumn(label: Text('% Total'), numeric: true),
+              ],
+              rows: _pieceTypeSummary.map((item) {
+                return DataRow(
+                  color: WidgetStateProperty.resolveWith<Color?>((Set<WidgetState> states) {
+                    if (_pieceTypeSummary.indexOf(item) % 2 != 0) {
+                      return theme.colorScheme.surfaceContainerLowest.withAlpha(40);
+                    }
+                    return null;
+                  }),
+                  cells: [
+                    DataCell(Text(item.pieceType, style: theme.textTheme.bodyMedium)),
+                    DataCell(Text(item.material, style: theme.textTheme.bodyMedium)),
+                    DataCell(Text(item.color, style: theme.textTheme.bodyMedium)),
+                    DataCell(Text(NumberFormat.decimalPattern('pt_BR').format(item.quantity), style: theme.textTheme.bodyMedium)),
+                    DataCell(Text('${item.percentageOfTotal.toStringAsFixed(1)}%', style: theme.textTheme.bodyMedium)),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        );
+      },
     );
   }
 }

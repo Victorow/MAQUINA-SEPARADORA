@@ -1,16 +1,48 @@
 // lib/screens/configuration_screen.dart
 import 'package:flutter/material.dart';
+// ignore: depend_on_referenced_packages
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/app_drawer.dart';
-// Importe seu main.dart se quiser acessar supabaseUrl, ou coloque supabaseUrl em um arquivo de config separado.
-// import '../main.dart'; // Exemplo se supabaseUrl estivesse acessível de main.dart
 
-class ConfigurationScreen extends StatelessWidget {
-  // Mudado para StatelessWidget
+class ConfigurationScreen extends StatefulWidget {
   static const routeName = '/configuration';
   const ConfigurationScreen({super.key});
 
-  // Se você tornou supabaseUrl acessível (ex: importando de um arquivo de config ou main.dart)
-  // final String currentSupabaseUrl = supabaseUrl; // Exemplo
+  @override
+  State<ConfigurationScreen> createState() => _ConfigurationScreenState();
+}
+
+class _ConfigurationScreenState extends State<ConfigurationScreen> {
+  final TextEditingController _controller = TextEditingController();
+  String? _savedBaseUrl;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBaseUrl();
+  }
+
+  Future<void> _loadBaseUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _savedBaseUrl = prefs.getString('baseUrl') ?? 'http://localhost:3000';
+      _controller.text = _savedBaseUrl!;
+      _loading = false;
+    });
+  }
+
+  Future<void> _saveBaseUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('baseUrl', _controller.text.trim());
+    setState(() {
+      _savedBaseUrl = _controller.text.trim();
+    });
+    // ignore: use_build_context_synchronously
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Endereço da API salvo com sucesso!')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,66 +51,67 @@ class ConfigurationScreen extends StatelessWidget {
         title: const Text('Configuração da Conexão'),
       ),
       drawer: const AppDrawer(),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView(
-          // Usando ListView para manter a estrutura, caso queira adicionar mais itens depois
-          children: <Widget>[
-            Text(
-              'Conexão com o Banco de Dados',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 20),
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Este aplicativo está configurado para usar o Supabase como provedor de banco de dados na nuvem.',
-                      style: Theme.of(context).textTheme.bodyLarge,
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ListView(
+                children: <Widget>[
+                  Text(
+                    'Conexão com o Backend (API REST)',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 20),
+                  Card(
+                    elevation: 2,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Este aplicativo está configurado para se comunicar com um backend REST (Node.js + MySQL).',
+                            style: TextStyle(fontSize: 15),
+                          ),
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: _controller,
+                            decoration: const InputDecoration(
+                              labelText: 'Endereço da API (baseUrl)',
+                              prefixIcon: Icon(Icons.link),
+                              border: OutlineInputBorder(),
+                              hintText: 'Ex: http://192.168.0.100:3000',
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.save),
+                            label: const Text('Salvar'),
+                            onPressed: _saveBaseUrl,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Endereço atual salvo: ${_savedBaseUrl ?? "-"}',
+                            style: const TextStyle(
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                                color: Colors.grey),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    // Se você tornar supabaseUrl acessível, pode exibi-la:
-                    // Row(
-                    //   children: [
-                    //     const Icon(Icons.link, color: Colors.grey),
-                    //     const SizedBox(width: 8),
-                    //     Expanded(
-                    //       child: Text(
-                    //         'URL do Projeto: $currentSupabaseUrl', // Necessário importar ou passar a URL
-                    //         style: const TextStyle(fontSize: 13, color: Colors.blueGrey),
-                    //       ),
-                    //     ),
-                    //   ],
-                    // ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'As credenciais de conexão (URL e Chave Anon) são definidas no código-fonte (main.dart) e não são configuráveis através desta interface para o Supabase.',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
-                          color: Colors.grey),
+                  ),
+                  const SizedBox(height: 30),
+                  Center(
+                    child: Icon(
+                      Icons.cloud_done_outlined,
+                      size: 60,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            // Você pode adicionar outras configurações do aplicativo aqui no futuro,
-            // que não sejam relacionadas à conexão direta do banco Supabase.
-            const SizedBox(height: 30),
-            Center(
-              child: Icon(
-                Icons.cloud_done_outlined,
-                size: 60,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

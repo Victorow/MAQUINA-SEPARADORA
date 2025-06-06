@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Seus imports de tela
 import 'screens/dashboard_screen.dart';
@@ -9,20 +8,8 @@ import 'screens/maintenance_screen.dart';
 import 'screens/configuration_screen.dart';
 import 'screens/about_screen.dart';
 
-// --- Configuração do Supabase ---
-const String supabaseUrl = 'https://dfyyieapoytaaypqbewn.supabase.co';
-const String supabaseAnonKey =
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRmeXlpZWFwb3l0YWF5cHFiZXduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg2Njg1NzEsImV4cCI6MjA2NDI0NDU3MX0.EQvuq-xXqYsTXIgJG0bwFrA4W0sDIAF56DjTc3DHeQE';
-// --- Fim da Configuração do Supabase ---
-
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Supabase.initialize(
-    url: supabaseUrl,
-    anonKey: supabaseAnonKey,
-  );
-
   runApp(const MyApp());
 }
 
@@ -33,21 +20,7 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  // Removido: override desnecessário do didChangeAppLifecycleState
-
+class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -70,7 +43,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           ),
         ),
         cardTheme: const CardThemeData(
-          // Corrigido para CardThemeData
           elevation: 3.0,
           margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
           shape: RoundedRectangleBorder(
@@ -86,7 +58,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
               fontSize: 18.0,
               fontWeight: FontWeight.w600,
               color: Colors.blue[800]),
-          titleSmall: TextStyle(
+          titleSmall: const TextStyle(
               fontSize: 16.0,
               fontWeight: FontWeight.w500,
               color: Colors.black87),

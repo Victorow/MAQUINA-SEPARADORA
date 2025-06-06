@@ -1,6 +1,4 @@
-// lib/models/dashboard_data.dart
 import 'package:equatable/equatable.dart';
-// import 'package:flutter/material.dart'; // Removed due to 'unused_import' lint (was for 'Color')
 
 class DashboardData extends Equatable {
   final int totalPiecesToday;
@@ -43,8 +41,6 @@ class ProductionByHour extends Equatable {
 class ProductionByDestination extends Equatable {
   final String destination;
   final int count;
-  // If you need to associate a Color here, you'd import 'package:flutter/material.dart'
-  // and add: final Color color;
 
   const ProductionByDestination({required this.destination, required this.count});
 
